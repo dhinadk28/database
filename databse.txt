@@ -1,0 +1,132 @@
+1)Database design for Zen class programme:
+
+users table:
+id (primary key)
+name
+email
+password
+codekata table:
+id (primary key)
+name
+description
+start_date
+end_date
+attendance table:
+id (primary key)
+user_id (foreign key references users.id)
+codekata_id (foreign key references codekata.id)
+is_present (boolean)
+topics table:
+id (primary key)
+name
+tasks table:
+id (primary key)
+codekata_id (foreign key references codekata.id)
+topic_id (foreign key references topics.id)
+description
+company_drives table:
+id (primary key)
+name
+description
+start_date
+end_date
+mentors table:
+id (primary key)
+name
+email
+mentees table:
+id (primary key)
+mentor_id (foreign key references mentors.id)
+user_id (foreign key references users.id)
+Queries:
+
+2)Find all the topics and tasks which are taught in the month of October:
+
+
+
+vbnet
+Copy code
+SELECT t.name AS topic_name, ts.description AS task_description
+FROM topics t
+JOIN tasks ts ON t.id = ts.topic_id
+JOIN codekata ck ON ts.codekata_id = ck.id
+WHERE MONTH(ck.start_date) = 10
+
+
+
+3)Find all the company drives which appeared between 15 oct-2020 and 31-oct-2020:
+
+
+
+sql
+Copy code
+SELECT *
+FROM company_drives
+WHERE start_date >= '2020-10-15' AND end_date <= '2020-10-31'
+
+
+
+4)Find all the company drives and students who appeared for the placement:
+
+
+
+
+vbnet
+Copy code
+SELECT cd.name AS company_drive_name, u.name AS student_name
+FROM company_drives cd
+JOIN attendance att ON cd.id = att.codekata_id
+JOIN users u ON att.user_id = u.id
+
+
+
+5)Find the number of problems solved by the user in codekata:
+
+
+
+
+sql
+Copy code
+SELECT COUNT(*)
+FROM attendance att
+JOIN tasks ts ON att.codekata_id = ts.codekata_id
+WHERE att.user_id = [user_id] AND att.is_present = 1
+
+
+
+
+6)
+Find all the mentors with who has the mentee's count more than 15:
+vbnet
+Copy code
+SELECT m.name AS mentor_name, COUNT(mt.id) AS mentee_count
+FROM mentors m
+JOIN mentees mt ON m.id = mt.mentor_id
+GROUP BY m.id
+HAVING COUNT(mt.id) > 15
+
+
+
+
+7)
+Find the number of users who are absent and task is not submitted between 15 oct-2020 and 31-oct-2020 using mongodb use your own data to that specific dates:
+php
+Copy code
+db.attendance.find({
+  "is_present": 0,
+  "codekata_id": {
+    "$in": db.tasks.distinct("codekata_id", {
+      "description": {
+        "$nin": db.attendance.distinct("codekata_id", {
+          "user_id": {"$in": db.users.distinct("_id", {
+            "email": {"$regex": "example.com"}
+          })},
+          "is_present": 1
+        })
+      },
+      "codekata_id": {"$in": db.codekata.find({
+        "start_date": {"$gte": new Date("2020-10-15"), "$lte": new Date("2020-10-31")}
+      }).distinct("_id")}
+    })
+  }
+}).count()
