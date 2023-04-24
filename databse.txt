@@ -1,132 +1,136 @@
-1)Database design for Zen class programme:
+The database for Zen class program can be designed with the following collections:
 
-users table:
-id (primary key)
+Users:
+user_id (primary key)
 name
 email
-password
-codekata table:
-id (primary key)
-name
-description
-start_date
-end_date
-attendance table:
-id (primary key)
-user_id (foreign key references users.id)
-codekata_id (foreign key references codekata.id)
-is_present (boolean)
-topics table:
-id (primary key)
-name
-tasks table:
-id (primary key)
-codekata_id (foreign key references codekata.id)
-topic_id (foreign key references topics.id)
-description
-company_drives table:
-id (primary key)
-name
-description
-start_date
-end_date
-mentors table:
-id (primary key)
-name
-email
-mentees table:
-id (primary key)
-mentor_id (foreign key references mentors.id)
-user_id (foreign key references users.id)
-Queries:
-
-2)Find all the topics and tasks which are taught in the month of October:
+phone_number
+role (student/mentor)
+Codekata:
+user_id (foreign key referencing Users collection)
+problem_id (primary key)
+problem_name
+problem_description
+problem_difficulty
+date_solved
+Attendance:
+attendance_id (primary key)
+user_id (foreign key referencing Users collection)
+date_attended
+Topics:
+topic_id (primary key)
+topic_name
+topic_description
+Tasks:
+task_id (primary key)
+task_name
+task_description
+deadline
+Company_drives:
+company_drive_id (primary key)
+company_name
+drive_date
+students_appeared (list of user_id)
+Mentors:
+mentor_id (primary key)
+mentor_name
+mentee_count
 
 
 
-vbnet
-Copy code
-SELECT t.name AS topic_name, ts.description AS task_description
-FROM topics t
-JOIN tasks ts ON t.id = ts.topic_id
-JOIN codekata ck ON ts.codekata_id = ck.id
-WHERE MONTH(ck.start_date) = 10
-
-
-
-3)Find all the company drives which appeared between 15 oct-2020 and 31-oct-2020:
-
-
-
-sql
-Copy code
-SELECT *
-FROM company_drives
-WHERE start_date >= '2020-10-15' AND end_date <= '2020-10-31'
-
-
-
-4)Find all the company drives and students who appeared for the placement:
-
-
-
-
-vbnet
-Copy code
-SELECT cd.name AS company_drive_name, u.name AS student_name
-FROM company_drives cd
-JOIN attendance att ON cd.id = att.codekata_id
-JOIN users u ON att.user_id = u.id
-
-
-
-5)Find the number of problems solved by the user in codekata:
-
-
-
-
-sql
-Copy code
-SELECT COUNT(*)
-FROM attendance att
-JOIN tasks ts ON att.codekata_id = ts.codekata_id
-WHERE att.user_id = [user_id] AND att.is_present = 1
-
-
-
-
-6)
-Find all the mentors with who has the mentee's count more than 15:
-vbnet
-Copy code
-SELECT m.name AS mentor_name, COUNT(mt.id) AS mentee_count
-FROM mentors m
-JOIN mentees mt ON m.id = mt.mentor_id
-GROUP BY m.id
-HAVING COUNT(mt.id) > 15
-
-
-
-
-7)
-Find the number of users who are absent and task is not submitted between 15 oct-2020 and 31-oct-2020 using mongodb use your own data to that specific dates:
-php
-Copy code
-db.attendance.find({
-  "is_present": 0,
-  "codekata_id": {
-    "$in": db.tasks.distinct("codekata_id", {
-      "description": {
-        "$nin": db.attendance.distinct("codekata_id", {
-          "user_id": {"$in": db.users.distinct("_id", {
-            "email": {"$regex": "example.com"}
-          })},
-          "is_present": 1
-        })
-      },
-      "codekata_id": {"$in": db.codekata.find({
-        "start_date": {"$gte": new Date("2020-10-15"), "$lte": new Date("2020-10-31")}
-      }).distinct("_id")}
-    })
-  }
-}).count()
+1) To find all the topics and tasks which are taught in the month of October:
+db.Topics.aggregate([
+    {
+        $lookup: {
+            from: "Tasks",
+            localField: "topic_id",
+            foreignField: "topic_id",
+            as: "tasks"
+        }
+    },
+    {
+        $unwind: "$tasks"
+    },
+    {
+        $match: {
+            "tasks.deadline": {
+                $gte: ISODate("2020-10-01"),
+                $lte: ISODate("2020-10-31")
+            }
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            topic_name: 1,
+            task_name: "$tasks.task_name"
+        }
+    }
+])
+2) To find all the company drives which appeared between 15 Oct-2020 and 31-Oct-2020:
+db.Company_drives.find({
+    drive_date: {
+        $gte: ISODate("2020-10-15"),
+        $lte: ISODate("2020-10-31")
+    }
+})
+3) To find all the company drives and students who appeared for the placement:
+db.Company_drives.aggregate([
+    {
+        $lookup: {
+            from: "Users",
+            localField: "students_appeared",
+            foreignField: "user_id",
+            as: "students"
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            company_drive_id: 1,
+            company_name: 1,
+            students: "$students.name"
+        }
+    }
+])
+4) To find the number of problems solved by the user in Codekata:
+db.Codekata.count({
+    user_id: "<user_id>"
+})
+5) To find all the mentors who have a mentee count more than 15:
+db.Mentors.find({
+    mentee_count: {
+        $gt: 15
+    }
+})
+6) Find the number of users who are absent and task is not submitted  between 15 oct-2020 and 31-oct-202
+db.Attendance.aggregate([
+    {
+        $lookup: {
+            from: "Tasks",
+            localField: "user_id",
+            foreignField: "user_id",
+            as: "tasks"
+        }
+    },
+    {
+        $match: {
+            date_attended: {
+                $gte: ISODate("2020-10-15"),
+                $lte: ISODate("2020-10-31")
+            },
+            "tasks.deadline": {
+                $lte: ISODate("2020-10-31")
+            },
+            "tasks.submitted": false
+        }
+    },
+    {
+        $group: {
+            _id: "$user_id"
+        }
+    },
+    {
+        $count: "num_users"
+    }
+])
